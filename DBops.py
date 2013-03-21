@@ -25,7 +25,6 @@ def getPostsList():
 		cur = con.cursor()
 		cur.execute("SELECT objectid from objects_list;")
 		postid_list = [tuple[0] for tuple in cur]
-
 	except sql.Error, e:
 	    print "Error %s:" % e.args[0]
 	    sys.exit(1)
@@ -42,9 +41,23 @@ def getNewPosts():
 	allposts = getPostsList()
 	graph = GraphAPI(ACCESS_TOKEN)
 	response = graph.get('sandyspets/?fields=posts.fields(id)')
-	for element in res['posts']['data']:
-   		if element['id'] not in allposts:
-   			insertPostinDB(getPost(element['id']))
+	next_page  = response['posts']['paging']['next']
+	response = response['posts']
+	out_file = open('test1.txt','w')	
+	while next_page!= "":	
+		for element in response['data']:
+	  		if element['id'] not in allposts:
+  				insertPostinDB(getPost(element['id']))
+	  	response = requests.get(next_page)
+		if response.status_code == 200:
+			try:
+				#if 'next' in response.json()['paging'].keys():
+				next_page = response.json()['paging']['next']
+			except:
+				next_page = ""
+				print 'response: '+str(response.json())
+   			response = response.json()		
+   			
 
 def getPost(postid):
 
@@ -87,6 +100,9 @@ def insertPostinDB(post,deleted_flag=False):
 	else:
 		link = ""
 
+	con = sql.connect('sandyspets')
+	cur = con.cursor()
+
 	cur.execute('insert into post_info values(?,?,?,?,?,?,?,?,?,?)',[postid, message, author[0],\
 		author[1],shares_count, likes_count,post["type"],link,getTime(post["created_time"]),\
 		getTime(post["updated_time"])])
@@ -111,7 +127,7 @@ def insertPostinDB(post,deleted_flag=False):
 			likes_list = post["likes"]["data"]
 		if deleted_flag == True:
 			likes_list = post["likes"]["data"]
-		print 'DEBUGGING: iterating over likes: '+str(likes_list)
+		# print 'DEBUGGING: iterating over likes: '+str(likes_list)
 		for like in likes_list:
 			cur.execute('insert into user_likes values(?,?,?,?)',[num_userlikes,like["id"],like["name"],postid])
 			print 'inserted into the user-likes table [%s, %s, %s]' %(like["id"],like["name"],postid)
@@ -147,6 +163,12 @@ def insertPostinDB(post,deleted_flag=False):
 			print 'insert into user-activities table [%s,%s,"comment",%s]' %(comment["from"]["id"]\
 				,comment["from"]["name"],comment["created_time"])
 			num_useractivities += 1
+	cur.execute('insert into objects_list values(?,?)',[postid, 'n']) #%(postid,('y' if deleted_flag else 'n'))
+ 	print 'inserted into objects_list table (%s,%s)' %(postid,'n')		
+	con.commit()
+
+	print 'exiting function'
+
 
 def checkIfDeleted(postid):
 	
@@ -194,6 +216,7 @@ def cleandb():
 		cur.execute("delete from post_info;")
 		cur.execute("delete from user_activities;") #addID
 		cur.execute("delete from user_posts;")	#add ID
+		con.commit()
 		print 'tables cleaned successfully!'
 
 	except sql.Error, e:
@@ -247,33 +270,35 @@ file_count = 3
 deleted_counter = 0
 
 #deleting all data from all tables
-cleandb()
+#cleandb()
 con = None
+getNewPosts()
 try:
 	con = sql.connect('sandyspets')
 	cur = con.cursor()
 	print 'cursor ...'
-	while file_count <= 3: 
-		sandy_file = open('SandysPets'+str(file_count)+'.txt','r')
-		#out_file = open('tmp','w')
-		# deleted_posts_file = open(deleted_info,'w')
-		print 'reading from SandysPets2.txt...'
+	#uncomment below lines
+	# while file_count <= 3: 
+	# 	sandy_file = open('SandysPets'+str(file_count)+'.txt','r')
+	# 	#out_file = open('tmp','w')
+	# 	# deleted_posts_file = open(deleted_info,'w')
+	# 	print 'reading from SandysPets2.txt...'
 
-		file_count += file_count
-		for line in sandy_file:
-			json_line = simplejson.loads(line)
-			#print line
-			#out_file.write(line)
-			deleted_flag = False
-			for element in json_line["data"]:
-				postid = element["id"]
-				deleted_flag= checkIfDeleted(postid)
-				if deleted_flag == True:
-					deleted_counter += 1
-				insertPostinDB(element,deleted_flag)
-				cur.execute('insert into objects_list values(?,?)',[postid, ('y' if deleted_flag else 'n')]) #%(postid,('y' if deleted_flag else 'n'))
-				print 'inserted into deleted_objects table (%s,%s)' %(postid,('y' if deleted_flag else 'n'))
-				con.commit()
+	# 	file_count += file_count
+	# 	for line in sandy_file:
+	# 		json_line = simplejson.loads(line)
+	# 		#print line
+	# 		#out_file.write(line)
+	# 		deleted_flag = False
+	# 		for element in json_line["data"]:
+	# 			postid = element["id"]
+	# 			deleted_flag= checkIfDeleted(postid)
+	# 			if deleted_flag == True:
+	# 				deleted_counter += 1
+	# 			insertPostinDB(element,deleted_flag)
+	# 			cur.execute('insert into objects_list values(?,?)',[postid, ('y' if deleted_flag else 'n')]) #%(postid,('y' if deleted_flag else 'n'))
+	# 			print 'inserted into deleted_objects table (%s,%s)' %(postid,('y' if deleted_flag else 'n'))
+	# 			con.commit()
 
 except sql.Error, e:
     print "Error %s:" % e.args[0]
