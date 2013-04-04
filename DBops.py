@@ -34,6 +34,7 @@ def getPostsList():
 	        con.close()
 	return postid_list
 
+
 def getNewPosts():
 	
 	global ACCESS_TOKEN
@@ -146,7 +147,7 @@ def insertPostinDB(post,deleted_flag=False):
 	#if we do not have all the comments for the post then we need to get those comments
 	
 	if post["comments"]["count"] != len(comments_list) and not deleted_flag:
-			comments = getAll(postid, "comments")
+			comments_list = getAll(postid, "comments")
 			if comments_list is None:
 				comments_list = post["comments"]["data"]
 	
