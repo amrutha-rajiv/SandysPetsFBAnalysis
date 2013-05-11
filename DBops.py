@@ -21,7 +21,7 @@ def getPostsList():
 	postid_list = []
 
 	try:
-		con = sql.connect('sandyspets')
+		con = sql.connect('sandyspets6-8')
 		cur = con.cursor()
 		cur.execute("SELECT objectid from objects_list;")
 		postid_list = [tuple[0] for tuple in cur]
@@ -101,7 +101,7 @@ def insertPostinDB(post,deleted_flag=False):
 	else:
 		link = ""
 
-	con = sql.connect('sandyspets')
+	con = sql.connect('sandyspets6-8')
 	cur = con.cursor()
 
 	cur.execute('insert into post_info values(?,?,?,?,?,?,?,?,?,?)',[postid, message, author[0],\
@@ -139,31 +139,31 @@ def insertPostinDB(post,deleted_flag=False):
 			print 'inserted into user-activities table [%s, %s, \'like\']' %(like["id"],\
 				like["name"])
 			num_useractivities += 1 
-
-	if "data" in post["comments"].keys():
-		comments_list = post["comments"]["data"]
-	else:
-		comments_list = []
-	#if we do not have all the comments for the post then we need to get those comments
-	
-	if post["comments"]["count"] != len(comments_list) and not deleted_flag:
-			comments_list = getAll(postid, "comments")
-			if comments_list is None:
-				comments_list = post["comments"]["data"]
-	
-	if comments_list != None:
-		for comment in comments_list:
-			cur.execute('insert into user_comments values(?,?,?,?,?,?)',[comment["id"],\
-				comment["from"]["id"],comment["from"]["name"],comment["message"],postid,\
-				getTime(comment["created_time"])])
-			print 'insert into the user-comments table [%s, %s, %s, %s,%s,%s]' %(comment["id"],comment["from"]["id"]\
-				,comment["from"]["name"],comment["message"],postid,comment["created_time"])
-			
-			cur.execute('insert into user_activities values(?,?,?,?,?)',[num_useractivities,author[0], \
-				author[1],'comment', getTime(comment["created_time"])])
-			print 'insert into user-activities table [%s,%s,"comment",%s]' %(comment["from"]["id"]\
-				,comment["from"]["name"],comment["created_time"])
-			num_useractivities += 1
+	if "comments" in post.keys():
+		if "data" in post["comments"].keys():
+			comments_list = post["comments"]["data"]
+		else:
+			comments_list = []
+		#if we do not have all the comments for the post then we need to get those comments
+		
+		if not deleted_flag:
+				comments_list = getAll(postid, "comments")
+				if comments_list is None:
+					comments_list = post["comments"]["data"]
+		
+		if comments_list != None:
+			for comment in comments_list:
+				cur.execute('insert into user_comments values(?,?,?,?,?,?)',[comment["id"],\
+					comment["from"]["id"],comment["from"]["name"],comment["message"],postid,\
+					getTime(comment["created_time"])])
+				print 'insert into the user-comments table [%s, %s, %s, %s,%s,%s]' %(comment["id"],comment["from"]["id"]\
+					,comment["from"]["name"],comment["message"],postid,comment["created_time"])
+				
+				cur.execute('insert into user_activities values(?,?,?,?,?)',[num_useractivities,author[0], \
+					author[1],'comment', getTime(comment["created_time"])])
+				print 'insert into user-activities table [%s,%s,"comment",%s]' %(comment["from"]["id"]\
+					,comment["from"]["name"],comment["created_time"])
+				num_useractivities += 1
 	cur.execute('insert into objects_list values(?,?)',[postid, 'n']) #%(postid,('y' if deleted_flag else 'n'))
  	print 'inserted into objects_list table (%s,%s)' %(postid,'n')		
 	con.commit()
@@ -188,7 +188,7 @@ def getAccessToken():
 def createTables():
 	con = None
 	try:
-		con = sql.connect('sandyspets')
+		con = sql.connect('sandyspets6-8')
 		cur = con.cursor()
 		cur.execute("CREATE TABLE objects_list (objectid TEXT, deleted TEXT)")#key objectid
 		cur.execute("CREATE TABLE user_comments (commentid TEXT, userid TEXT, userName TEXT, comment TEXT,post_id TEXT, created_time timestamp )") #primary key commentid
@@ -209,7 +209,7 @@ def createTables():
 def cleandb():
 	con = None
 	try:
-		con = sql.connect('sandyspets')
+		con = sql.connect('sandyspets6-8')
 		cur = con.cursor()
 		cur.execute("delete from objects_list;")#key objectid
 		cur.execute("delete from user_comments;") #primary key commentid
@@ -243,20 +243,26 @@ def getAll(objectid,attr):
 	except:
 		print 'objectid deleted: ', objectid
 		return None
-	attr_vals = graph.get(objectid+'/'+attr)
+	attr_vals = graph.get(objectid+'/'+attr+'?summary=true')
 	attr_list= attr_vals['data'] #list of [id name pairs]
 	next_page  = attr_vals['paging']['next']
-	expected_count = post[attr]['count']
+	#expected_count = post[attr]['count']
 	
-	while (len(attr_list) < expected_count) and (next_page != ""):
+	while (next_page != ""):
+		#print next_page
 		res = requests.get(next_page)#edit next_page
 		if res.status_code ==200:
 			attr_list = attr_list + res.json()['data']
-			if 'next' in res.json()['paging'].keys():
-				next_page = res.json()['paging']['next']
-				# print "[DEBUGGING]  next page: "+str(next_page)
-				# print "[DEBUGGING]  attr_list: %s, expected_count: %s ",str(len(attr_list)),str(expected_count)
-			else:
+			try:
+				if 'next' in res.json()['paging'].keys():
+					next_page = res.json()['paging']['next']
+					# print "[DEBUGGING]  next page: "+str(next_page)
+					# print "[DEBUGGING]  attr_list: %s, expected_count: %s ",str(len(attr_list)),str(expected_count)
+				else:
+					next_page = ""
+			except:
+				if 'paging' not in res.json().keys():
+					print res.json()
 				next_page = ""
 	return attr_list
 
@@ -275,12 +281,12 @@ deleted_counter = 0
 con = None
 getNewPosts()
 try:
-	con = sql.connect('sandyspets')
+	con = sql.connect('sandyspets6-8')
 	cur = con.cursor()
 	print 'cursor ...'
 	#uncomment below lines
 	# while file_count <= 3: 
-	# 	sandy_file = open('SandysPets'+str(file_count)+'.txt','r')
+	# 	sandy_file = open('sandyspets6-8'+str(file_count)+'.txt','r')
 	# 	#out_file = open('tmp','w')
 	# 	# deleted_posts_file = open(deleted_info,'w')
 	# 	print 'reading from SandysPets2.txt...'
