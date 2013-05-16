@@ -1,5 +1,5 @@
 #python libraries
-import sys, time
+import sys, time,re
 from datetime import datetime
 #third party libraries
 import sqlite3 as sql
@@ -16,13 +16,71 @@ def getDBConnection(DB_NAME):
 		print "Error %s:" % e.args[0]
 		sys.exit(1)
 
+def generatePetReports(posts_file="sandyspets-postid-lost.csv",pet_status="LOST"):
+	(cur,con) = getDBConnection('sandyspets6-8')
+	lost_csvfile = open(posts_file,'r')
+	petreport_num = cur.execute('select count(*) from petreport_mapping').next()[0]
+	list_postid = []
+	for line in lost_csvfile:
+		if 'post' in line:
+			continue
+		postid = re.split('\n',line)[0]
+		list_postid.append(postid)
+		petreport_num += 1
+		cur.execute('insert into petreport_mapping values (?,?,?)',[postid,petreport_num,pet_status])
+	con.commit()
+
+def list_overlap(list_a,list_b):
+	return any(i for i in list_a if i in list_b)
+
+def fileToList(file_ptr):
+	list_ids = []
+	for line in file_ptr:
+		if 'post' in line:
+			continue
+		postid = re.split('\n',line)[0]
+		list_ids.append(postid)
+	return list_ids
+
+def check_ifUnique():
+	file_lost = open('sandyspets-postid-lost.csv','r')
+	file_found = open('sandyspets-postid-found.csv','r')
+	file_unknown = open('sandyspets-postid-unknown.csv','r')
+	
+	list_lost = fileToList(file_lost)
+	list_found = fileToList(file_found)
+	list_unknown = fileToList(file_unknown)
+
+	overlap = list_overlap(list_found,list_unknown)
+
+	print "overlap: "+str(overlap)
+	
+def analyzeSpecificPosts():
+	(cur,con) = getDBConnection('sandyspets6-8')
+	#results = cur.execute("select post from post_info where postid in %s")
+	csvfile = open('sandyspets-postid - unknown_type(2).csv','r')
+	list_postid = []
+	for line in csvfile:
+		if 'post' in line:
+			continue
+		# postid = re.split("\"",re.split('\n',line)[0])[1]
+		postid = re.split('\n',line)[0]
+		list_postid.append(postid)
+	post_ids='('+','.join(list_postid)+')'
+	#print post_ids
+	sql_string='select post from post_info where postid in '+post_ids+';'
+	results = cur.execute(sql_string)
+	list_posts = [(list(result)) for result in results]
+	file_name = 'bow-unknown_type-posts(2).txt'
+	post_frequencies = getFrequency(list_posts,file_name)
+
 def analyzeMessages(type="POST"):
 	(cur,con) = getDBConnection('sandyspets6-8')
-	if type="POST":
+	if type=="POST":
 		results = cur.execute("select post from post_info;")
 		file_name = 'post-freqdist.txt'
 
-	elif type="COMMENT":
+	elif type=="COMMENT":
 		results = cur.execute("select comment from user_comments;")
 		file_name = 'comment-freqdist.txt'
 	else:
@@ -124,4 +182,7 @@ def analyze ():
 		#select * from user_comments order by created_time;
 		#time between posts/comments: mean min max
 
-analyzeMessages(type="COMMENT")
+#analyzeMessages(type="COMMENT")
+# analyzeSpecificPosts()
+#check_ifUnique()
+generatePetReports()

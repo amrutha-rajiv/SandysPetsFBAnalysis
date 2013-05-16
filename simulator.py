@@ -24,3 +24,6 @@ def writeLog(LOG_FILE,LOG_FORMAT,ACTIVITY,USER,TIMESTAMP):
 	log_writer.write('- - - '+TIMESTAMP+' '+ACTIVITY+' - - '+USER['ID']+' '+USER['NAME']+'\n')
 					
 
+def generatePetReports():
+	print "PetReports generated!"
+
