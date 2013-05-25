@@ -16,6 +16,38 @@ def getDBConnection(DB_NAME):
 		print "Error %s:" % e.args[0]
 		sys.exit(1)
 
+def getAlbumNameforPosts():
+	#cannot match post with photo using ID, a message or smtg is reqd
+	(cur,con) = getDBConnection('sandyspets6-8')	
+	try:
+		results = cur.execute('select album_name, photo_id from photos_albums;')
+	except sql.Error, e:
+		print "Error %s:" % e.args[0]
+		sys.exit(1)
+	photo_ids ={}
+	for row in results:
+		photo_ids[row[1]]=row[0]
+	out_file = open('status-compare.txt','w')
+	list_of_files=['sandyspets-postid-lost.csv','sandyspets-postid-found.csv','sandyspets-postid-unknown.csv']
+	file_status={'sandyspets-postid-lost.csv':'LOST','sandyspets-postid-found.csv':'FOUND' ,'sandyspets-postid-unknown.csv':'UKNOWN'}
+	album_status={"Needs Foster or Adoption":"FOUND" , "NJ - FOUND CATS":"FOUND", "Their Journeys":"Journeys",\
+	"NJ - LOST CATS":"LOST","NY - FOUND DOGS":"FOUND","NY - LOST DOGS":"LOST", "NY - FOUND CATS":"FOUND", \
+	"NY - LOST CATS" :"LOST","NJ - LOST DOGS":"LOST", "NJ - FOUND DOGS":"FOUND",\
+	"BrooklynACC Emergency Center":"UKNOWN",\
+	"SAFE":"UNKNOWN","Missing Pieces":"UNKNOWN","Profile Pictures":"SKIP",\
+	"Rainbow Bridge - RIP":"RIP", "In Temporary Foster":"FOUND","Adopted":"FOUND","NY and NJ BIRDS":"UNKNOWN",\
+	"HELPFUL TIPS":"SKIP","Mitchell Field Emergency Shelter":"FOUND","Cover Photos":"SKIP"}
+	for file_name in list_of_files:
+		
+		with open(file_name,'r') as f:
+			list_ids = fileToList(f)
+			for post_id in list_ids:
+				#print 'iterating over file: '+file_name
+				if post_id in photo_ids.keys():
+					print_stmt= "%s\talbum:%s\tcategory:%s\n" %(post_id,photo_ids[post_id],file_status[file_name])
+					out_file.write(print_stmt)
+					print print_stmt	
+
 def generatePetReports(posts_file="sandyspets-postid-lost.csv",pet_status="LOST"):
 	(cur,con) = getDBConnection('sandyspets6-8')
 	lost_csvfile = open(posts_file,'r')
@@ -110,7 +142,15 @@ def getFrequency(list,file_name):
 			print (element.encode('utf8')+" "+str(fd[element]))			
 			out_file.write(element.encode('utf8')+" "+str(fd[element])+"\n")
 
-
+def mapUsers():
+	(cur,con) = getDBConnection('sandyspets6-8')
+	results = cur.execute('select distinct userid from user_activities;')
+	list_users = [result[0].encode('ascii','ignore') for result in results]
+	user_num = cur.execute('select count(*) from user_mapping').next()[0]
+	for user in list_users:
+		user_num += 1
+		cur.execute('insert into user_mapping values (?,?);',[user, user_num])
+	con.commit()
 
 def analyze ():
 	(cur,con) = getDBConnection('sandyspets')
@@ -185,4 +225,6 @@ def analyze ():
 #analyzeMessages(type="COMMENT")
 # analyzeSpecificPosts()
 #check_ifUnique()
-generatePetReports()
+# generatePetReports()
+# getAlbumNameforPosts()
+mapUsers()

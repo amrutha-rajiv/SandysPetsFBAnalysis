@@ -1,3 +1,31 @@
 *.txt
 *.pyc
 python-restconsumer/
+*.csv
+log/
+*.log
+pigjars/
+prod_info/
+Splunk - Sandyspets/
+Writing/
+config.py
+facebook-sdk/
+Master Deadlines 12-13.doc
+NOTES: COPY TO GOOGLE DOC
+SandysPets.db
+count_comments.sh
+okpets524
+sandyspet524
+sandyspet6-8
+sandyspets
+sandyspets (Case Conflict 1)
+sandyspets (Case Conflict 2)
+sandyspets (Case Conflict 3)
+sandyspets.sh
+sandyspets524
+sandyspets6-8
+specs.doc
+split up data from a response
+temp.py
+tmp
+

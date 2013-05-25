@@ -23,7 +23,66 @@ def getDBConnection(DB_NAME):
 		print "Error %s:" % e.args[0]
 		sys.exit(1)
 
-def insertAllPhotosInDB(page_name):
+def insertPhotoFromAlbum(DB_NAME,album_id,album_name,photo_id):
+	global ACCESS_TOKEN	
+	global num_userlikes
+
+	photo_desc = ""	
+	source_link=""
+	picture_link =""
+	link =""
+	likes_count = 0
+	shares_count =0
+
+	graph = GraphAPI(ACCESS_TOKEN)	
+	photo = graph.get(photo_id)
+
+	(cur,con) = getDBConnection(DB_NAME)
+	if "from" in photo.keys():
+		author = [photo["from"]["id"],photo["from"]["name"]]
+	
+	if "name" in photo.keys():
+		photo_desc = photo["name"]
+
+	if "picture" in photo.keys():
+		picture_link = photo["picture"]
+			
+	if "source" in photo.keys():
+		source_link = photo["source"]
+
+	if "link" in photo.keys():
+		link = photo["link"]
+
+	created_time = getTime(photo["created_time"])
+	updated_time = getTime(photo["updated_time"])
+
+	likes_list = getAll(photo_id,"likes")
+
+	likes_count = len(likes_list)
+
+
+	cur.execute('INSERT INTO photos_info values(?,?,?,?,?,?,?,?,?,?,?,?,?)',[photo_id, album_id, album_name , photo_desc, created_time , updated_time, author[1], author[0], picture_link, source_link, link,likes_count,shares_count])
+	print 'INSERT INTO photos_info(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)' %(photo_id, album_id, album_name , photo_desc, created_time , updated_time, author[1], author[0], picture_link, source_link, link,str(likes_count),str(shares_count))
+
+	if likes_count >0 :
+		for like in likes_list:
+			cur.execute('insert into user_likes_photos values(?,?,?,?)',[num_userlikes,like["id"],like["name"],photo_id])
+			print 'inserted into the user-likes-photos table [%s, %s, %s]' %(like["id"],like["name"],photo_id)
+			num_userlikes += 1	
+
+	if "comments" in photo.keys():
+		comments_list = getAll(photo_id,"comments")
+		if comments_list != None:
+			for comment in comments_list:
+				cur.execute('insert into user_comments_photos values(?,?,?,?,?,?,?)',[comment["id"],\
+					comment["message"],comment["from"]["id"],comment["from"]["name"], comment["like_count"],\
+					photo_id, getTime(comment["created_time"])])
+				print 'insert into the user_comments_photos table [%s, %s, %s, %s,%s,%s,%s]' %(comment["id"],\
+					comment["message"],comment["from"]["id"],comment["from"]["name"], str(comment["like_count"]),\
+					photo_id, getTime(comment["created_time"]))				
+	con.commit()
+
+def insertAllPhotosInDB(page_name,DB_NAME):
 	global ACCESS_TOKEN	
 
 	graph = GraphAPI(ACCESS_TOKEN)
@@ -33,25 +92,30 @@ def insertAllPhotosInDB(page_name):
 		albums = albums["data"]
 	else: 
 		return []
+	existing_photos = getObjectsList(DB_NAME,col="photo_id",table="photos_info")
 	for element in albums:
 		album_id = element['id']
 		album_name = element['name']
-		if "Timeline Photos" in album_name:
-			continue
+		# if "Timeline Photos" in album_name:
+		# 	continue
 		album_ids.append(album_id)
 		photos = getPhotoIds(album_id)
-		(cur,con) = getDBConnection('sandyspets6-8')
+		(cur,con) = getDBConnection(DB_NAME)
 		for photo in photos:
-			try:
-				cur.execute('INSERT INTO photos_albums values(?,?,?)',[photo,album_id,album_name])
-			except sql.Error, e:
-				print "Error %s:" % e.args[0]
-				sys.exit(1)
-		con.commit()
+			if photo not in existing_photos:
+				insertPhotoFromAlbum(DB_NAME, album_id,album_name,photo)
+			#uncomment below to insert ONLY photo id into the db
+		# 	try:
+		# 		cur.execute('INSERT INTO photos_albums values(?,?,?)',[photo,album_id,album_name])
+		# 	except sql.Error, e:
+		# 		print "Error %s:" % e.args[0]
+		# 		sys.exit(1)
+		# con.commit()
 
 	return album_ids
 
 #TODO: Test and Execute!!!!
+#get ALL the photos
 def getPhotoIds(album_id):
 	global ACCESS_TOKEN	
 
@@ -79,15 +143,15 @@ def getPhotoIds(album_id):
 	
 	return photos_list
 
-def getPostsList():
+def getObjectsList(DB_NAME,col="objectid",table="objects_list"):
 	
 	con = None
 	postid_list = []
 
 	try:
-		con = sql.connect('sandyspets6-8')
-		cur = con.cursor()
-		cur.execute("SELECT objectid from objects_list;")
+		(cur,con) = getDBConnection(DB_NAME)
+		sql_string = "SELECT "+col+" from "+table+";"
+		cur.execute(sql_string)
 		postid_list = [tuple[0] for tuple in cur]
 	except sql.Error, e:
 	    print "Error %s:" % e.args[0]
@@ -98,21 +162,27 @@ def getPostsList():
 	        con.close()
 	return postid_list
 
+def getPostsList(DB_NAME):
+	(cur,con) = getDBConnection(DB_NAME)
+	results = cur.execute("select postid from post_info;")
+	list_posts = [result[0] for result in results]
+	return list_posts
 
-def getNewPosts():
+def getNewPosts(PAGE_NAME,DB_NAME):
 	
 	global ACCESS_TOKEN
 
-	allposts = getPostsList()
 	graph = GraphAPI(ACCESS_TOKEN)
-	response = graph.get('sandyspets/?fields=posts.fields(id)')
+
+	allposts = getPostsList(DB_NAME)
+	response = graph.get(PAGE_NAME+'/?fields=posts.fields(id)')
 	next_page  = response['posts']['paging']['next']
-	response = response['posts']
-	out_file = open('test1.txt','w')	
+	response = response['posts']	
 	while next_page!= "":	
 		for element in response['data']:
-	  		if element['id'] not in allposts:
-  				insertPostinDB(getPost(element['id']))
+			postid = element['id']
+	  		if postid not in allposts:
+  				insertPostinDB(graph.get(postid),DB_NAME)
 	  	response = requests.get(next_page)
 		if response.status_code == 200:
 			try:
@@ -123,15 +193,7 @@ def getNewPosts():
 				print 'response: '+str(response.json())
    			response = response.json()		
    			
-
-def getPost(postid):
-
-	global ACCESS_TOKEN
-
-	graph = GraphAPI(ACCESS_TOKEN)
-	return graph.get(postid)
-	
-def insertPostinDB(post,deleted_flag=False):
+def insertPostinDB(post,DB_NAME):
 	
 	global num_userposts
 	global num_useractivities
@@ -144,6 +206,8 @@ def insertPostinDB(post,deleted_flag=False):
 		author = [post["from"]["id"],post["from"]["name"]]
 		# if author not in post_authors:
 		# 	post_authors.append(author)
+	else:
+		author=["",""]
 	
 	if "message" in post.keys():
 		message = post["message"]
@@ -165,56 +229,40 @@ def insertPostinDB(post,deleted_flag=False):
 	else:
 		link = ""
 
-	con = sql.connect('sandyspets6-8')
-	cur = con.cursor()
-
+	(cur,con) = getDBConnection(DB_NAME)
 	cur.execute('insert into post_info values(?,?,?,?,?,?,?,?,?,?)',[postid, message, author[0],\
 		author[1],shares_count, likes_count,post["type"],link,getTime(post["created_time"]),\
 		getTime(post["updated_time"])])
 	print 'inserted into post_info table [ %s, %s, %s, %s, %d, %d,%s,%s,%s,%s]' %(postid, message, author[0],\
 		author[1],shares_count, likes_count,post["type"],link,post["created_time"],post["updated_time"])
 	
-	if author[1] != 'Hurricane Sandy Lost and Found Pets':
-		cur.execute('insert into user_activities values(?,?,?,?)',[num_useractivities,author[0], author[1],\
-			'post',getTime(created_time)])
-		print 'inserted into user-activities table [%s, %s, \'post\', %s]' %(author[0],\
-			author[1],created_time)
-		num_useractivities += 1 
+	# if author[1] != 'Hurricane Sandy Lost and Found Pets':
+	# 	cur.execute('insert into user_activities values(?,?,?,?)',[num_useractivities,author[0], author[1],\
+	# 		'post',getTime(created_time)])
+	# 	print 'inserted into user-activities table [%s, %s, \'post\', %s]' %(author[0],\
+	# 		author[1],created_time)
+	# 	num_useractivities += 1 
 		
-		cur.execute('insert into user_posts values(?,?,?)',[author[0], author[1], postid])
-		print 'inserted into user-posts table [%s,%s,%s]' %(author[0], author[1], postid)
+		# cur.execute('insert into user_posts values(?,?,?)',[author[0], author[1], postid])
+		# print 'inserted into user-posts table [%s,%s,%s]' %(author[0], author[1], postid)
 
 	if "likes" in post.keys():
-		#if we do not have all the likes for the post then we need to get those likes 
-		if post["likes"]["count"] != len(post["likes"]["data"]):
-			likes_list = getAll(postid,"likes")
-		else:
-			likes_list = post["likes"]["data"]
-		if deleted_flag == True:
-			likes_list = post["likes"]["data"]
-		# print 'DEBUGGING: iterating over likes: '+str(likes_list)
+		likes_list = getAll(postid,"likes")
 		for like in likes_list:
 			cur.execute('insert into user_likes values(?,?,?,?)',[num_userlikes,like["id"],like["name"],postid])
 			print 'inserted into the user-likes table [%s, %s, %s]' %(like["id"],like["name"],postid)
 			num_userlikes += 1
 
-			cur.execute('insert into user_activities values(?,?,?,?,?)',[num_useractivities,like["id"],\
-				like["name"], 'like',None])
-			print 'inserted into user-activities table [%s, %s, \'like\']' %(like["id"],\
-				like["name"])
-			num_useractivities += 1 
+			# cur.execute('insert into user_activities values(?,?,?,?,?)',[num_useractivities,like["id"],\
+			# 	like["name"], 'like',None])
+			# print 'inserted into user-activities table [%s, %s, \'like\']' %(like["id"],\
+			# 	like["name"])
+			# num_useractivities += 1 
 	if "comments" in post.keys():
-		if "data" in post["comments"].keys():
+		comments_list = getAll(postid, "comments")
+		if comments_list is None:
 			comments_list = post["comments"]["data"]
-		else:
-			comments_list = []
-		#if we do not have all the comments for the post then we need to get those comments
-		
-		if not deleted_flag:
-				comments_list = getAll(postid, "comments")
-				if comments_list is None:
-					comments_list = post["comments"]["data"]
-		
+
 		if comments_list != None:
 			for comment in comments_list:
 				cur.execute('insert into user_comments values(?,?,?,?,?,?)',[comment["id"],\
@@ -223,11 +271,11 @@ def insertPostinDB(post,deleted_flag=False):
 				print 'insert into the user-comments table [%s, %s, %s, %s,%s,%s]' %(comment["id"],comment["from"]["id"]\
 					,comment["from"]["name"],comment["message"],postid,comment["created_time"])
 				
-				cur.execute('insert into user_activities values(?,?,?,?,?)',[num_useractivities,author[0], \
-					author[1],'comment', getTime(comment["created_time"])])
-				print 'insert into user-activities table [%s,%s,"comment",%s]' %(comment["from"]["id"]\
-					,comment["from"]["name"],comment["created_time"])
-				num_useractivities += 1
+				# cur.execute('insert into user_activities values(?,?,?,?,?)',[num_useractivities,author[0], \
+				# 	author[1],'comment', getTime(comment["created_time"])])
+				# print 'insert into user-activities table [%s,%s,"comment",%s]' %(comment["from"]["id"]\
+				# 	,comment["from"]["name"],comment["created_time"])
+				# num_useractivities += 1
 	cur.execute('insert into objects_list values(?,?)',[postid, 'n']) #%(postid,('y' if deleted_flag else 'n'))
  	print 'inserted into objects_list table (%s,%s)' %(postid,'n')		
 	con.commit()
@@ -248,11 +296,9 @@ def checkIfDeleted(postid):
 def getAccessToken():
 	ACCESS_TOKEN = raw_input("Enter a valid Facebook access token: ")
 
-def createTables():
-	con = None
+def createTables(DB_NAME):
+	(cur,con) = getDBConnection(DB_NAME)
 	try:
-		con = sql.connect('sandyspets6-8')
-		cur = con.cursor()
 		cur.execute("CREATE TABLE objects_list (objectid TEXT, deleted TEXT)")#key objectid
 		cur.execute("CREATE TABLE user_comments (commentid TEXT, userid TEXT, userName TEXT, comment TEXT,post_id TEXT, created_time timestamp )") #primary key commentid
 		cur.execute("CREATE TABLE user_likes(userlikesid, userid TEXT, userName TEXT, post_id TEXT)") #add ID
@@ -269,11 +315,9 @@ def createTables():
 	    if con:
 	        con.close()
 
-def cleandb():
-	con = None
+def cleandb(DB_NAME):
+	(cur,con) = getDBConnection(DB_NAME)
 	try:
-		con = sql.connect('sandyspets6-8')
-		cur = con.cursor()
 		cur.execute("delete from objects_list;")#key objectid
 		cur.execute("delete from user_comments;") #primary key commentid
 		cur.execute("delete from user_likes;") #add ID
@@ -308,7 +352,14 @@ def getAll(objectid,attr):
 		return None
 	attr_vals = graph.get(objectid+'/'+attr+'?summary=true')
 	attr_list= attr_vals['data'] #list of [id name pairs]
-	next_page  = attr_vals['paging']['next']
+	next_flag = False
+	if 'paging' in attr_vals.keys():
+		if 'next' in attr_vals['paging'].keys():
+			next_flag = True		
+	if next_flag:
+		next_page  = attr_vals['paging']['next']		
+	else:
+		next_page = ""
 	#expected_count = post[attr]['count']
 	
 	while (next_page != ""):
@@ -329,48 +380,30 @@ def getAll(objectid,attr):
 				next_page = ""
 	return attr_list
 
-def pullTimelineData():
-	#For Every file
+def pullFacebookDataFromTextFile(DB_NAME):
+	(cur,con) = getDBConnection(DB_NAME)
+	try:		
+		while file_count <= 3: 
+			sandy_file = open('sandyspets6-8'+str(file_count)+'.txt','r')
+			#out_file = open('tmp','w')
+			# deleted_posts_file = open(deleted_info,'w')
+			print 'reading from SandysPets2.txt...'
 
-	# post_authors = []
-	# comment_authors = []
-	# active_users = []
-	#deleted_info = "deleted_posts.txt"
-
-	file_count = 3
-	deleted_counter = 0
-
-	#deleting all data from all tables
-	#cleandb()
-	con = None
-	getNewPosts()
-	try:
-		con = sql.connect('sandyspets6-8')
-		cur = con.cursor()
-		print 'cursor ...'
-		#uncomment below lines
-		# while file_count <= 3: 
-		# 	sandy_file = open('sandyspets6-8'+str(file_count)+'.txt','r')
-		# 	#out_file = open('tmp','w')
-		# 	# deleted_posts_file = open(deleted_info,'w')
-		# 	print 'reading from SandysPets2.txt...'
-
-		# 	file_count += file_count
-		# 	for line in sandy_file:
-		# 		json_line = simplejson.loads(line)
-		# 		#print line
-		# 		#out_file.write(line)
-		# 		deleted_flag = False
-		# 		for element in json_line["data"]:
-		# 			postid = element["id"]
-		# 			deleted_flag= checkIfDeleted(postid)
-		# 			if deleted_flag == True:
-		# 				deleted_counter += 1
-		# 			insertPostinDB(element,deleted_flag)
-		# 			cur.execute('insert into objects_list values(?,?)',[postid, ('y' if deleted_flag else 'n')]) #%(postid,('y' if deleted_flag else 'n'))
-		# 			print 'inserted into deleted_objects table (%s,%s)' %(postid,('y' if deleted_flag else 'n'))
-		# 			con.commit()
-
+			file_count += file_count
+			for line in sandy_file:
+				json_line = simplejson.loads(line)
+				#print line
+				#out_file.write(line)
+				deleted_flag = False
+				for element in json_line["data"]:
+					postid = element["id"]
+					deleted_flag= checkIfDeleted(postid)
+					if deleted_flag == True:
+						deleted_counter += 1
+					insertPostinDB(element,deleted_flag)
+					cur.execute('insert into objects_list values(?,?)',[postid, ('y' if deleted_flag else 'n')]) #%(postid,('y' if deleted_flag else 'n'))
+					print 'inserted into deleted_objects table (%s,%s)' %(postid,('y' if deleted_flag else 'n'))
+					con.commit()
 	except sql.Error, e:
 	    print "Error %s:" % e.args[0]
 	    sys.exit(1)
@@ -380,4 +413,8 @@ def pullTimelineData():
 	print 'num deleted objects: '+str(deleted_counter) + 'out of '+str(num_posts)+' posts'
 
 #insert all photos from sandyspets page to the sqlitedb
-insertAllPhotosInDB('sandyspets')
+insertAllPhotosInDB('okpets','okpets524')
+#create all tables in the new DB
+# createTables('sandyspets524')
+#pull Timeline Data
+#getNewPosts('okpets','okpets524')
