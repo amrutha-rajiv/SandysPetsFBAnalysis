@@ -413,7 +413,7 @@ def pullFacebookDataFromTextFile(DB_NAME):
 	print 'num deleted objects: '+str(deleted_counter) + 'out of '+str(num_posts)+' posts'
 
 #insert all photos from sandyspets page to the sqlitedb
-insertAllPhotosInDB('okpets','okpets524')
+# insertAllPhotosInDB('okpets','okpets524')
 #create all tables in the new DB
 # createTables('sandyspets524')
 #pull Timeline Data

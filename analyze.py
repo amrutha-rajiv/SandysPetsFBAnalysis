@@ -152,6 +152,24 @@ def mapUsers():
 		cur.execute('insert into user_mapping values (?,?);',[user, user_num])
 	con.commit()
 
+def getTime(timestampstring):
+	timeval= time.strptime(timestampstring,'%Y-%m-%d %H:%M:%S')
+	return datetime.fromtimestamp(time.mktime(timeval))
+
+def mapAllPetReportsFromDB(DB_NAME,type="PHOTO"):
+	(cur,con) = getDBConnection(DB_NAME)
+	if type == "PHOTO":
+		sql_string = "select photo_id,created_time from photos_info;" 
+	elif type == "POSTS":
+		sql_string = "select post_id,created_time from post_info;"
+	results = cur.execute(sql_string)
+	list_petreports = [[result[0].encode('ascii','ignore'),result[1].encode('ascii','ignore')] for result in results]
+	petreport_num = cur.execute('select count(*) from petreport_mapping').next()[0]
+	for [petreport,created_time] in list_petreports:
+		petreport_num += 1
+		cur.execute('insert into petreport_mapping values (?,?,?,?);',[petreport, petreport_num, getTime(created_time), "Unknown"])
+	con.commit()
+
 def analyze ():
 	(cur,con) = getDBConnection('sandyspets')
 	try:
@@ -227,4 +245,6 @@ def analyze ():
 #check_ifUnique()
 # generatePetReports()
 # getAlbumNameforPosts()
-mapUsers()
+#mapUsers()
+#generatePetReports(posts_file="sandyspets-photos-id.csv")
+mapAllPetReportsFromDB('sandyspets6-8')
