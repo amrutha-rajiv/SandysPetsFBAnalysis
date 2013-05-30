@@ -68,7 +68,7 @@ def list_overlap(list_a,list_b):
 def fileToList(file_ptr):
 	list_ids = []
 	for line in file_ptr:
-		if 'post' in line:
+		if 'post' in line or 'comment' in line:
 			continue
 		postid = re.split('\n',line)[0]
 		list_ids.append(postid)
@@ -170,6 +170,25 @@ def mapAllPetReportsFromDB(DB_NAME,type="PHOTO"):
 		cur.execute('insert into petreport_mapping values (?,?,?,?);',[petreport, petreport_num, getTime(created_time), "Unknown"])
 	con.commit()
 
+#INCOMPLETE
+#create petmatch_mapping table and dload the petmatch_file from splunk
+def mapPetmatches(DB_NAME,petmatch_filename):
+	petmatch_file = open(petmatch_filename,'r')
+	comments_list = fileToList(petmatch_file)
+	comments_list='('+','.join(comments_list)+')'
+	(cur,con) = getDBConnection(DB_NAME)
+	petreport_num = cur.execute('select count(*) from petreport_mapping').next()[0]
+	petmatch_num = cur.execute('select count(*) from petmatch_mapping').next()[0]
+	results = cur.execute('SELECT commentid,postid, comment where commentid in '+comments_list)
+	#iterate over the list of comments to identify a mapped postid for every post
+	list_petmatchcomments = [[result[0].encode('ascii','ignore'), result[1].encode('ascii','ignore'), result[2].encode('ascii','ignore')] for result in results]
+	for [commentid,postid,comment] in list_petmatchcomments:
+		pet2_id = postid+"MATCH"+commentid
+		petmatch_num += 1
+		cur.execute('INSERT INTO petmatch_mapping VALUES(?,?,?)',[commentid,pet2_id,petmatch_num])
+		cur.execute('INSERT INTO petreport_mapping VALUES(?,?,?,?)',[pet2_id,petreport_num,"","Unknown"])
+	con.commit()
+	
 def analyze ():
 	(cur,con) = getDBConnection('sandyspets')
 	try:
