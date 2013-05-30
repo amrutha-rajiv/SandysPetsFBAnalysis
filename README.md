@@ -1,4 +1,18 @@
 SandysPetsFBAnalysis
 ====================
 
-This project is geared towards my thesis 
+
+<b>FBtoSQLite.py</b> - Pulls Facebook Data and stores it in a SQLite database
+This program can pull Albums & Photos and the Facebook Page's Timeline feed.
+
+To collect the page's <b>Timeline Feed<b>, call the <i>getPageFeed</i> function
+<i>getPageFeed(page_name,DB_NAME)</i>
+
+To collect the page's <b>Album & photo information</b>, call <i>insertAlbumsAndPhotosInDB.</i>
+<i>insertAlbumsAndPhotosInDB(page_name,DB_NAME)</i>
+
+<i>page_name</i> for the facebook page with URL https://www.facebook.com/sandyspets would be sandyspets
+
+<i>DB_NAME</i> is the name of your SQLite Database that you want to store the Data in.
+
+If the Database tables do not exist, FBtSQLite will create the tables.

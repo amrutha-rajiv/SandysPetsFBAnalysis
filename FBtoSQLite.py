@@ -7,13 +7,12 @@ import requests, simplejson
 from facepy import GraphAPI
 
 #GLOBAL VARIABLES
-
 ACCESS_TOKEN =raw_input("Enter a valid Facebook access token: ")
-num_userposts = 1
-num_useractivities = 1
 num_userlikes = 1
 num_posts = 0
 num_albumlikes = 0
+
+
 
 def getDBConnection(DB_NAME):
 	try:
@@ -57,7 +56,7 @@ def insertPhotoFromAlbum(DB_NAME,album_id,album_name,photo_id):
 	created_time = getTime(photo["created_time"])
 	updated_time = getTime(photo["updated_time"])
 
-	likes_list = getAll(photo_id,"likes")
+	likes_list = getAllInstancesOf(photo_id,"likes")
 
 	likes_count = len(likes_list)
 
@@ -72,12 +71,12 @@ def insertPhotoFromAlbum(DB_NAME,album_id,album_name,photo_id):
 			num_userlikes += 1	
 
 	if "comments" in photo.keys():
-		comments_list = getAll(photo_id,"comments")
+		comments_list = getAllInstancesOf(photo_id,"comments")
 		if comments_list != None:
 			for comment in comments_list:
 				cur.execute('insert into user_comments_photos values(?,?,?,?,?,?,?)',[comment["id"],\
 					comment["message"],comment["from"]["id"],comment["from"]["name"], comment["like_count"],\
-					photo_id, getTime(comment["created_time"])])
+					getTime(comment["created_time"]),photo_id])
 				print 'insert into the user_comments_photos table [%s, %s, %s, %s,%s,%s,%s]' %(comment["id"],\
 					comment["message"],comment["from"]["id"],comment["from"]["name"], str(comment["like_count"]),\
 					photo_id, getTime(comment["created_time"]))				
@@ -168,11 +167,10 @@ def insertAlbumInfo(album_id,DB_NAME):
 	con.close()
 
 
-def insertAllPhotosInDB(page_name,DB_NAME):
+def insertAlbumsAndPhotosInDB(page_name,DB_NAME):
 	global ACCESS_TOKEN	
 
 	graph = GraphAPI(ACCESS_TOKEN)
-	album_ids = []
 	albums = graph.get(page_name+"/albums")
 	if 'data' in albums.keys():
 		albums = albums["data"]
@@ -185,23 +183,13 @@ def insertAllPhotosInDB(page_name,DB_NAME):
 		album_name = element['name']
 		# if "Timeline Photos" in album_name:
 		# 	continue
-		album_ids.append(album_id)
-		if album_id in existing_albums:
+		if album_id not in existing_albums:
 			insertAlbumInfo(album_id,DB_NAME)
 		photos = getPhotoIds(album_id)
 		(cur,con) = getDBConnection(DB_NAME)
 		for photo in photos:
 			if photo not in existing_photos:
 				insertPhotoFromAlbum(DB_NAME, album_id,album_name,photo)
-			#uncomment below to insert ONLY photo id into the db
-		# 	try:
-		# 		cur.execute('INSERT INTO photos_albums values(?,?,?)',[photo,album_id,album_name])
-		# 	except sql.Error, e:
-		# 		print "Error %s:" % e.args[0]
-		# 		sys.exit(1)
-		# con.commit()
-
-	return album_ids
 
 def getPhotoIds(album_id):
 	global ACCESS_TOKEN	
@@ -230,16 +218,16 @@ def getPhotoIds(album_id):
 	
 	return photos_list
 
-def getObjectsList(DB_NAME,col="objectid",table="objects_list"):
+def getObjectsList(DB_NAME,col,table):
 	
 	con = None
 	postid_list = []
 
 	try:
 		(cur,con) = getDBConnection(DB_NAME)
-		sql_string = "SELECT "+col+" from "+table+";"
+		sql_string = "SELECT DISTINCT "+col+" from "+table+";"
 		cur.execute(sql_string)
-		postid_list = [tuple[0] for tuple in cur]
+		objectid_list = [tuple[0] for tuple in cur]
 	except sql.Error, e:
 	    print "Error %s:" % e.args[0]
 	    sys.exit(1)
@@ -247,7 +235,7 @@ def getObjectsList(DB_NAME,col="objectid",table="objects_list"):
 	finally: 
 	    if con:
 	        con.close()
-	return postid_list
+	return objectid_list
 
 def getPageFeed(page_name,DB_NAME):
 	global ACCESS_TOKEN	
@@ -256,7 +244,7 @@ def getPageFeed(page_name,DB_NAME):
 	response = graph.get(page_name+'/?fields=feed.fields(from)')
 	next_page  = response['feed']['paging']['next']
 	response = response['feed']	
-	allposts = getPostsList(DB_NAME)
+	allposts = getObjectsList(DB_NAME,"postid","post_info")
 	while next_page!= "":	
 		for element in response['data']:
 			postid = element['id']
@@ -279,7 +267,7 @@ def getPostsList(DB_NAME):
 	list_posts = [result[0] for result in results]
 	return list_posts
 
-#this is to be deprecated
+#this is to be deprecated\
 def getNewPosts(PAGE_NAME,DB_NAME):
 	
 	global ACCESS_TOKEN
@@ -365,15 +353,11 @@ def insertPostinDB(post,DB_NAME):
 				print 'insert into the user_comments table [%s, %s, %s, %s,%s,%s]' %(comment["id"],comment["from"]["id"]\
 					,comment["from"]["name"],comment["message"],postid,comment["created_time"])
 				
-	cur.execute('insert into objects_list values(?,?)',[postid, 'n']) #%(postid,('y' if deleted_flag else 'n'))
- 	print 'inserted into objects_list table (%s,%s)' %(postid,'n')		
 	con.commit()
-	print 'exiting function'
 
 def checkIfDeleted(postid):
 	
 	global ACCESS_TOKEN	
-
 	graph = GraphAPI(ACCESS_TOKEN)
 	try:
 		post = graph.get(postid)
@@ -388,28 +372,15 @@ def createTables(DB_NAME):
 	(cur,con) = getDBConnection(DB_NAME)
 	try:
 
-		cur.execute('CREATE TABLE petreport_mapping(fbpost_id TEXT, petreport_id INT, created_time TIMESTAMP, pet_status TEXT);')
-		cur.execute('CREATE TABLE photos_info(photo_id TEXT, album_id TEXT, album_name TEXT, photo_desc TEXT, created_time timestamp, updated_time timestamp, author_name TEXT, author_id TEXT, picture_link TEXT, source_link TEXT, link TEXT,likes_count INT,shares_count INT );')
-		cur.execute('CREATE TABLE user_comments_photos(commentid TEXT, comment TEXT, userid TEXT, userName TEXT, likes_count INT, created_time timestamp, photo_id TEXT);')	
-		cur.execute('CREATE TABLE user_likes_photos(userlikesid INT, userid TEXT, userName TEXT, photo_id TEXT);')
-		cur.execute('CREATE TABLE user_mapping(fbuser_id TEXT, user_id INT);')
-		cur.execute("CREATE TABLE objects_list (objectid TEXT, deleted TEXT)")#key objectid
-		cur.execute("CREATE TABLE user_comments (commentid TEXT, userid TEXT, userName TEXT, comment TEXT,post_id TEXT, created_time timestamp )") #primary key commentid
-		cur.execute("CREATE TABLE user_likes(userlikesid, userid TEXT, userName TEXT, post_id TEXT)") #add ID
-		cur.execute("CREATE TABLE post_info(postid TEXT, post TEXT, author_id TEXT, author_name share_count INT, like_count INT, post_type TEXT, link TEXT, created_time timestamp,updated_time timestamp)")
-		cur.execute("CREATE TABLE user_activities(useractivitiesid INT, userid TEXT, userName TEXT, activity TEXT, timestamp timedate)") #addID
-		cur.execute("CREATE TABLE user_posts(userpostsid INT, userid TEXT, userName TEXT, post_id TEXT)")	#add ID
-		#CREATE TABLE photos_info
-		#CREATE TABLE user_comments_photos
-		#CREATE TABLE user_likes_photos
-		cur.execute("CREATE TABLE albums_info(album_id TEXT,album_name TEXT, album_desc TEXT,\
-			author_id TEXT, author_name TEXT,link TEXT,cover_photo_id TEXT,photo_count INT,\
-			 album_type TEXT,created_time TIMESTAMP, updated_time TIMESTAMP, like_count INT,\
-			  comment_count INT)")
-		cur.execute("CREATE TABLE albums_likes(num_albumlikes INT,userid TEXT,username TEXT, \
-			album_id TEXT)")		
-		cur.execute("CREATE TABLE albums_comments(commentid TEXT, comment TEXT, author_id TEXT, \
-			author_name TEXT, like_count INT, album_id TEXT, created_time TIMESTAMP)")
+		cur.execute('CREATE TABLE IF NOT EXISTS photos_info(photo_id TEXT, album_id TEXT, album_name TEXT, photo_desc TEXT, created_time timestamp, updated_time timestamp, author_name TEXT, author_id TEXT, picture_link TEXT, source_link TEXT, link TEXT,likes_count INT,shares_count INT );')
+		cur.execute('CREATE TABLE IF NOT EXISTS user_comments_photos(commentid TEXT, comment TEXT, userid TEXT, userName TEXT, likes_count INT, created_time timestamp, photo_id TEXT);')	
+		cur.execute('CREATE TABLE IF NOT EXISTS user_likes_photos(userlikesid INT, userid TEXT, userName TEXT, photo_id TEXT);')
+		cur.execute("CREATE TABLE IF NOT EXISTS user_comments (commentid TEXT, userid TEXT, userName TEXT, comment TEXT,post_id TEXT, created_time timestamp )") #primary key commentid
+		cur.execute("CREATE TABLE IF NOT EXISTS user_likes(userlikesid, userid TEXT, userName TEXT, post_id TEXT)") #add ID
+		cur.execute("CREATE TABLE IF NOT EXISTS post_info(postid TEXT, post TEXT, author_id TEXT, author_name share_count INT, like_count INT, post_type TEXT, link TEXT, created_time timestamp,updated_time timestamp)")
+		cur.execute("CREATE TABLE IF NOT EXISTS albums_info(album_id TEXT,album_name TEXT, album_desc TEXT, author_id TEXT, author_name TEXT,link TEXT,cover_photo_id TEXT,photo_count INT, album_type TEXT,created_time TIMESTAMP, updated_time TIMESTAMP, like_count INT, comment_count INT);")
+		cur.execute("CREATE TABLE IF NOT EXISTS albums_likes(num_albumlikes INT,userid TEXT,username TEXT, album_id TEXT);")		
+		cur.execute("CREATE TABLE IF NOT EXISTS albums_comments(commentid TEXT, comment TEXT, author_id TEXT, author_name TEXT, like_count INT, album_id TEXT, created_time TIMESTAMP);")
 
 		print 'tables created successfully!'
 
@@ -424,12 +395,15 @@ def createTables(DB_NAME):
 def cleandb(DB_NAME):
 	(cur,con) = getDBConnection(DB_NAME)
 	try:
-		cur.execute("delete from objects_list;")#key objectid
 		cur.execute("delete from user_comments;") #primary key commentid
 		cur.execute("delete from user_likes;") #add ID
 		cur.execute("delete from post_info;")
-		cur.execute("delete from user_activities;") #addID
-		cur.execute("delete from user_posts;")	#add ID
+		cur.execute("delete from user_comments_photos;")
+		cur.execute("delete from user_likes_photos;") #add ID
+		cur.execute("delete from photos_info;")
+		cur.execute("delete from albums_likes") #add ID
+		cur.execute("delete from albums_info;")
+		cur.execute("delete from albums_comments;")
 		con.commit()
 		print 'tables cleaned successfully!'
 
@@ -440,12 +414,13 @@ def cleandb(DB_NAME):
 	finally: 
 	    if con:
 	        con.close()
+
 def getTime(timestampstring):
 	timeval= time.strptime(timestampstring[:-5],'%Y-%m-%dT%H:%M:%S')
 	gmt_offset_seconds = int(timestampstring[-4:])*60*60
 	return datetime.fromtimestamp(time.mktime(time.localtime(time.mktime(timeval)-gmt_offset_seconds)))
 
-def getAll(objectid,attr):
+def getAllInstancesOf(objectid,attr):
 
 	global ACCESS_TOKEN
 
@@ -476,8 +451,6 @@ def getAll(objectid,attr):
 			try:
 				if 'next' in res.json()['paging'].keys():
 					next_page = res.json()['paging']['next']
-					# print "[DEBUGGING]  next page: "+str(next_page)
-					# print "[DEBUGGING]  attr_list: %s, expected_count: %s ",str(len(attr_list)),str(expected_count)
 				else:
 					next_page = ""
 			except:

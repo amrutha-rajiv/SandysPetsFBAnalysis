@@ -188,6 +188,11 @@ def mapPetmatches(DB_NAME,petmatch_filename):
 		cur.execute('INSERT INTO petmatch_mapping VALUES(?,?,?)',[commentid,pet2_id,petmatch_num])
 		cur.execute('INSERT INTO petreport_mapping VALUES(?,?,?,?)',[pet2_id,petreport_num,"","Unknown"])
 	con.commit()
+
+def createMappingTables(DB_NAME):
+	(cur,con) = getDBConnection(DB_NAME)
+	cur.execute('CREATE TABLE IF NOT EXISTS petreport_mapping(fbpost_id TEXT, petreport_id INT, created_time TIMESTAMP, pet_status TEXT);')
+		
 	
 def analyze ():
 	(cur,con) = getDBConnection('sandyspets')

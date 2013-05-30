@@ -1,0 +1,5 @@
+facepy==0.8.4
+nltk==2.0.4
+numpy==1.7.1
+requests==1.1.0
+simplejson==2.3.2
