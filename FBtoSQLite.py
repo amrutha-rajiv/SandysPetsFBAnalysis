@@ -4,15 +4,16 @@ from datetime import datetime
 #third party libraries
 import sqlite3 as sql
 import requests, simplejson
-from facepy import GraphAPI
+from facepy import GraphAPI,get_application_access_token
 
 #GLOBAL VARIABLES
-ACCESS_TOKEN =raw_input("Enter a valid Facebook access token: ")
+#ACCESS_TOKEN =raw_input("Enter a valid Facebook access token: ")
+ACCESS_TOKEN = get_application_access_token('168352736667694','1438d29eb39a5c6fd190ca8c9bdef97f')
+page_name = raw_input("Enter the Facebook page name :")
+DB_NAME = raw_input("Enter SQLite DB name: ")
 num_userlikes = 1
 num_posts = 0
 num_albumlikes = 0
-
-
 
 def getDBConnection(DB_NAME):
 	try:
@@ -56,7 +57,7 @@ def insertPhotoFromAlbum(DB_NAME,album_id,album_name,photo_id):
 	created_time = getTime(photo["created_time"])
 	updated_time = getTime(photo["updated_time"])
 
-	likes_list = getAllInstancesOf(photo_id,"likes")
+	likes_list = getAllInstancesOf(photo_id,"likes",type="photo")
 
 	likes_count = len(likes_list)
 
@@ -71,7 +72,7 @@ def insertPhotoFromAlbum(DB_NAME,album_id,album_name,photo_id):
 			num_userlikes += 1	
 
 	if "comments" in photo.keys():
-		comments_list = getAllInstancesOf(photo_id,"comments")
+		comments_list = getAllInstancesOf(photo_id,"comments",type="photo")
 		if comments_list != None:
 			for comment in comments_list:
 				cur.execute('insert into user_comments_photos values(?,?,?,?,?,?,?)',[comment["id"],\
@@ -129,11 +130,11 @@ def insertAlbumInfo(album_id,DB_NAME):
 	if "updated_time" in album:
 		updated_time = album["updated_time"]
 	if "likes" in album:
-		likes = getAll(album_id,"likes")
+		likes = getAllInstancesOf(album_id,"likes",type="album")
 	else:
 		likes = []
 	if "comments" in album:
-		comments = getAll(album_id,"comments")
+		comments = getAllInstancesOf(album_id,"comments",type="album")
 	else:
 		comments = []
 
@@ -261,12 +262,6 @@ def getPageFeed(page_name,DB_NAME):
 				print 'response: '+str(response.json())
    			response = response.json()		
 
-def getPostsList(DB_NAME):
-	(cur,con) = getDBConnection(DB_NAME)
-	results = cur.execute("select postid from post_info;")
-	list_posts = [result[0] for result in results]
-	return list_posts
-
 #this is to be deprecated\
 def getNewPosts(PAGE_NAME,DB_NAME):
 	
@@ -336,14 +331,14 @@ def insertPostinDB(post,DB_NAME):
 		author[1],shares_count, likes_count,post["type"],link,post["created_time"],post["updated_time"])
 		
 	if "likes" in post.keys():
-		likes_list = getAll(postid,"likes")
+		likes_list = getAllInstancesOf(postid,"likes")
 		for like in likes_list:
 			cur.execute('insert into user_likes values(?,?,?,?)',[num_userlikes,like["id"],like["name"],postid])
 			print 'inserted into the user_likes table [%s, %s, %s]' %(like["id"],like["name"],postid)
 			num_userlikes += 1
 
 	if "comments" in post.keys():
-		comments_list = getAll(postid, "comments")
+		comments_list = getAllInstancesOf(postid, "comments")
 
 		if comments_list != None:
 			for comment in comments_list:
@@ -420,7 +415,7 @@ def getTime(timestampstring):
 	gmt_offset_seconds = int(timestampstring[-4:])*60*60
 	return datetime.fromtimestamp(time.mktime(time.localtime(time.mktime(timeval)-gmt_offset_seconds)))
 
-def getAllInstancesOf(objectid,attr):
+def getAllInstancesOf(objectid,attr,type="post"):
 
 	global ACCESS_TOKEN
 
@@ -431,7 +426,10 @@ def getAllInstancesOf(objectid,attr):
 	except:
 		print 'objectid deleted: ', objectid
 		return None
-	attr_vals = graph.get(objectid+'/'+attr+'?summary=true')
+	if type == "post":
+		attr_vals = graph.get(objectid+'/'+attr+'?summary=true')
+	else:
+		attr_vals = graph.get(objectid+'/'+attr)
 	attr_list= attr_vals['data'] #list of [id name pairs]
 	next_flag = False
 	if 'paging' in attr_vals.keys():
@@ -491,10 +489,10 @@ def pullFacebookDataFromTextFile(DB_NAME):
 	        con.close()	
 	print 'num deleted objects: '+str(deleted_counter) + 'out of '+str(num_posts)+' posts'
 
-#create all tables in the new DB
-#createTables('sandyspets529')
+#create all tables if tables don't exist in DB
+createTables(DB_NAME)
+# print "page_name: "+page_name
 #insert all photos from sandyspets page to the sqlitedb
-# insertAllPhotosInDB('sandyspets','sandyspets529')
+insertAlbumsAndPhotosInDB(page_name, DB_NAME)
 #pull Timeline Data
-#getNewPosts('okpets','okpets524')
-getPageFeed('sandyspets','sandyspets529')
+getPageFeed(page_name,DB_NAME)
