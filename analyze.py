@@ -161,7 +161,7 @@ def mapAllPetReportsFromDB(DB_NAME,type="PHOTO"):
 	if type == "PHOTO":
 		sql_string = "select photo_id,created_time from photos_info;" 
 	elif type == "POSTS":
-		sql_string = "select post_id,created_time from post_info;"
+		sql_string = "select postid,created_time from post_info;"
 	results = cur.execute(sql_string)
 	list_petreports = [[result[0].encode('ascii','ignore'),result[1].encode('ascii','ignore')] for result in results]
 	petreport_num = cur.execute('select count(*) from petreport_mapping').next()[0]
@@ -179,7 +179,7 @@ def mapPetmatches(DB_NAME,petmatch_filename):
 	(cur,con) = getDBConnection(DB_NAME)
 	petreport_num = cur.execute('select count(*) from petreport_mapping').next()[0]
 	petmatch_num = cur.execute('select count(*) from petmatch_mapping').next()[0]
-	results = cur.execute('SELECT commentid,postid, comment where commentid in '+comments_list)
+	results = cur.execute('SELECT commentid,post_id, comment from user_comments where commentid in '+comments_list)
 	#iterate over the list of comments to identify a mapped postid for every post
 	list_petmatchcomments = [[result[0].encode('ascii','ignore'), result[1].encode('ascii','ignore'), result[2].encode('ascii','ignore')] for result in results]
 	for [commentid,postid,comment] in list_petmatchcomments:
@@ -192,7 +192,8 @@ def mapPetmatches(DB_NAME,petmatch_filename):
 def createMappingTables(DB_NAME):
 	(cur,con) = getDBConnection(DB_NAME)
 	cur.execute('CREATE TABLE IF NOT EXISTS petreport_mapping(fbpost_id TEXT, petreport_id INT, created_time TIMESTAMP, pet_status TEXT);')
-		
+	cur.execute('CREATE TABLE IF NOT EXISTS user_mapping(fbuser_id TEXT, user_id INT);')
+	cur.execute('CREATE TABLE IF NOT EXISTS petmatch_mapping(fbcomment_id TEXT, pet_id TEXT, petmatch_id INT);')		
 	
 def analyze ():
 	(cur,con) = getDBConnection('sandyspets')
@@ -271,4 +272,8 @@ def analyze ():
 # getAlbumNameforPosts()
 #mapUsers()
 #generatePetReports(posts_file="sandyspets-photos-id.csv")
-mapAllPetReportsFromDB('sandyspets6-8')
+# mapAllPetReportsFromDB('sandyspets6-8')
+
+createMappingTables('sandyspets6-8')
+mapAllPetReportsFromDB('sandyspets6-8',type="POSTS")
+#mapPetmatches('sandyspets6-8',"sandyspets-commentid-matching.csv")

@@ -372,7 +372,7 @@ def createTables(DB_NAME):
 		cur.execute('CREATE TABLE IF NOT EXISTS user_likes_photos(userlikesid INT, userid TEXT, userName TEXT, photo_id TEXT);')
 		cur.execute("CREATE TABLE IF NOT EXISTS user_comments (commentid TEXT, userid TEXT, userName TEXT, comment TEXT,post_id TEXT, created_time timestamp )") #primary key commentid
 		cur.execute("CREATE TABLE IF NOT EXISTS user_likes(userlikesid, userid TEXT, userName TEXT, post_id TEXT)") #add ID
-		cur.execute("CREATE TABLE IF NOT EXISTS post_info(postid TEXT, post TEXT, author_id TEXT, author_name share_count INT, like_count INT, post_type TEXT, link TEXT, created_time timestamp,updated_time timestamp)")
+		cur.execute("CREATE TABLE IF NOT EXISTS post_info(postid TEXT, post TEXT, author_id TEXT, author_name TEXT,share_count INT, like_count INT, post_type TEXT, link TEXT, created_time timestamp,updated_time timestamp)")
 		cur.execute("CREATE TABLE IF NOT EXISTS albums_info(album_id TEXT,album_name TEXT, album_desc TEXT, author_id TEXT, author_name TEXT,link TEXT,cover_photo_id TEXT,photo_count INT, album_type TEXT,created_time TIMESTAMP, updated_time TIMESTAMP, like_count INT, comment_count INT);")
 		cur.execute("CREATE TABLE IF NOT EXISTS albums_likes(num_albumlikes INT,userid TEXT,username TEXT, album_id TEXT);")		
 		cur.execute("CREATE TABLE IF NOT EXISTS albums_comments(commentid TEXT, comment TEXT, author_id TEXT, author_name TEXT, like_count INT, album_id TEXT, created_time TIMESTAMP);")

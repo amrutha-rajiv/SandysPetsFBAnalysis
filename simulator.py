@@ -61,16 +61,16 @@ def getPetReportsCommentersListfromDB(DB_NAME):
 
 #comments that suggest matching activity
 def getPetMatchListsFromDB(DB_NAME):
-	(cur,con) = getDBConnection(DB_NAME):
+	(cur,con) = getDBConnection(DB_NAME)
 	try:
-		results = cur.execute('SELECT commentid,postid,userid,created_time FROM user_comments WHERE commentid in (SELECT commentid from petmatch_mapping);')
+		results = cur.execute('SELECT commentid,post_id,userid,created_time FROM user_comments WHERE commentid in (SELECT commentid from petmatch_mapping);')
 		list_petmatchcomments = [[result[0].encode('ascii','ignore'), result[1].encode('ascii','ignore'), result[2].encode('ascii','ignore'), result[3].encode('ascii','ignore')] for result in results]
-		results = cur.execute ('select commentid,petmatch_id from petmatch_mapping;')
-		list_petmatchmaps = dict([[result[0].encode('ascii','ignore'), result[1].encode('ascii','ignore')] for result in results])
+		results = cur.execute ('select fbcomment_id,petmatch_id from petmatch_mapping;')
+		list_petmatchmaps = dict([[result[0].encode('ascii','ignore'), result[1]] for result in results])
 	except sql.Error, e:
 		print "Error %s:" % e.args[0]
 		sys.exit(1)	
-	return (list_petmatchmaps,list_petmatchcomments)
+	return (list_petmatchcomments,list_petmatchmaps)
 
 #get requests = pet report likes	
 def generatePetReportsViews(output_filename,DB_NAME):
@@ -117,17 +117,23 @@ def generatePetMatchGET():
 def generatePetMatchCreate(output_filename,DB_NAME):
 	list_users = getUserListfromDB(DB_NAME)
 	(list_petmatchcomments,list_petmatchmaps) = getPetMatchListsFromDB(DB_NAME)
-	list_pets = getPetReportsCommentersListfromDB(DB_NAME) 
+	list_pets = getPetreportsListFromDB(DB_NAME)
 	output_file = open(output_filename,'w')
-	for [commentid,user,petreport,timestamp] in list_petmatchcomments:
+
+	for [commentid,petreport,user,timestamp] in list_petmatchcomments:
 		if user not in list_users:
+			print 'user %s not in list_users' %(user)
 			continue
 		if petreport not in list_pets:
+			print 'pet %s not in list_pets' %(petreport)
+			continue
+		if petreport+'MATCH'+commentid not in list_pets:
+			print 'pet %s not in list_pets' %(petreport+'MATCH'+commentid)
 			continue
 		user_id = list_users[user]
-		pet1_id = list_pets[petreport]
-		pet2_id = list_pets[postid+'MATCH'+commentid]
-		log_string = generateLogString(userid,str(pet1_id)+'/'+str(pet2_id),"propose_petmatch",timestamp)
+		pet1_id = list_pets[petreport][0]
+		pet2_id = list_pets[petreport+'MATCH'+commentid][0]
+		log_string = generateLogString(user_id,str(pet1_id)+'/'+str(pet2_id),"POST","propose_petmatch",timestamp)
 		print log_string	 
 		output_file.write(log_string+'\n')
 	print "PetMatch POST Requests generated!"
@@ -149,7 +155,7 @@ def generateLogString(userid,objectid,method,request_object,timestamp=""):
 		if element in VALUE_LOOKUP:
 			log_string += (VALUE_LOOKUP[element]+" ")
 		elif element == "%t":
-			if request_object == "petreport":
+			if request_object in URL:
 				log_string += (generateTimestamp(timestamp)+" ")
 			else:
 				log_string += (generateTimestamp()+" ")
@@ -162,4 +168,5 @@ def generateLogString(userid,objectid,method,request_object,timestamp=""):
 	return log_string
 
 #generatePetReportsGET("test_get.log",'sandyspets6-8')
-generatePetReportBookmarks("test_bookmarks.log","sandyspets6-8")
+#generatePetReportBookmarks("test_bookmarks.log","sandyspets6-8")
+# generatePetMatchCreate("test_proposepetmatch.log","sandyspets6-8")
