@@ -18,3 +18,10 @@ To collect the page's <b>Album & photo information</b>, call <i>insertAlbumsAndP
 If the Database tables do not exist, FBtSQLite will create the tables.
 
 <b>Note:</b> The Facebook Access Token is valid only for two hours, if the program stops executing after 2 hours, it is likely that the access token has expired. Restarting the program will resume pulling of data. 
+
+Requirements:
+python2.7
+sqlite3
+pip
+
+To install additional requirements please run the command pip install -r requirements.txt	

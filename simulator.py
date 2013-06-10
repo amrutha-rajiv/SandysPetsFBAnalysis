@@ -1,6 +1,6 @@
 import re, random,sys
 import sqlite3 as sql
-from analyze import getDBConnection
+from analyze import getDBConnection,fileToList
 from time import  localtime, strftime,strptime
 
 def getFeatures(LOG_FILE,LOG_FORMAT):
@@ -59,19 +59,6 @@ def getPetReportsCommentersListfromDB(DB_NAME):
 	print 'Commenters-Post list generated'
 	return list_postcommenters
 
-#comments that suggest matching activity
-def getPetMatchListsFromDB(DB_NAME):
-	(cur,con) = getDBConnection(DB_NAME)
-	try:
-		results = cur.execute('SELECT commentid,post_id,userid,created_time FROM user_comments WHERE commentid in (SELECT commentid from petmatch_mapping);')
-		list_petmatchcomments = [[result[0].encode('ascii','ignore'), result[1].encode('ascii','ignore'), result[2].encode('ascii','ignore'), result[3].encode('ascii','ignore')] for result in results]
-		results = cur.execute ('select fbcomment_id,petmatch_id from petmatch_mapping;')
-		list_petmatchmaps = dict([[result[0].encode('ascii','ignore'), result[1]] for result in results])
-	except sql.Error, e:
-		print "Error %s:" % e.args[0]
-		sys.exit(1)	
-	return (list_petmatchcomments,list_petmatchmaps)
-
 #get requests = pet report likes	
 def generatePetReportsViews(output_filename,DB_NAME):
 	list_pets = getPetreportsListFromDB(DB_NAME)
@@ -93,7 +80,45 @@ def generatePetReportsViews(output_filename,DB_NAME):
 		output_file.write(log_string+'\n')
 	print "PetReports GET Requests generated!"
 
+def getSubmittedPetReportsListfromDB(DB_NAME):
+	(cur,con) = getDBConnection(DB_NAME)
+	try:
+		#page_id = cur.execute('select author_id,count(author_id) as countid from post_info group by author_id order by countid desc limit 1;')[0].encode('ascii','ignore')
+		results = cur.execute('SELECT a.author_id,b.fbpost_id from post_info a, userpost_mapping b where b.userpostid=a.postid;')
+		list_submittedpetreports =  [[result[0].encode('ascii','ignore'),result[1].encode('ascii','ignore')] for result in results]
+	except sql.Error, e:
+		print "Error %s:" % e.args[0]
+		sys.exit(1)	
+	return list_submittedpetreports
+
+#POST requests = user posts	
+def generatePetReportsSubmission(output_filename,DB_NAME):
+	#all-posts(?) mapped
+	list_pets = getPetreportsListFromDB(DB_NAME)
+	#post-authors
+	list_users = getUserListfromDB(DB_NAME)
+	#user-posts
+	list_userposts = getSubmittedPetReportsListfromDB(DB_NAME)
+	output_file = open(output_filename,'w')
+	for [user, petreport] in list_userposts:
+		if user not in list_users:
+			print 'user is not in list'
+			continue
+		if petreport not in list_pets:
+			print 'pet report onot in list'
+			continue
+		user_id = list_users[user]
+		pet_id = list_pets[petreport][0]
+		timestamp = list_pets[petreport][1]
+		log_string = generateLogString(user_id,pet_id,"POST","petreport",timestamp)		
+		print log_string	 
+		output_file.write(log_string+'\n')
+	print "PetReports POST Requests generated!"
+
+#write to activity logs
 #post requests bookmarking = pet report likes +??
+#Mon May 20 10:16:27 2013 [PETREPORT_ADD_BOOKMARK]: amrutha has added a PetReport bookmark for {Rabbi} with ID{1452}
+#Date<sp>[action]:<sp><username><string representign action><ID{ID#}>
 def generatePetReportBookmarks(output_filename,DB_NAME):
 	list_pets = getPetreportsListFromDB(DB_NAME)
 	list_users = getUserListfromDB(DB_NAME)
@@ -111,9 +136,21 @@ def generatePetReportBookmarks(output_filename,DB_NAME):
 		output_file.write(log_string+'\n')
 	print "PetReports bookmarks POST Requests generated!"
 
-def generatePetMatchGET():
-	print "PetMatches GET Requests generated!"	
+#comments that suggest matching activity
+def getPetMatchListsFromDB(DB_NAME):
+	(cur,con) = getDBConnection(DB_NAME)
+	try:
+		results = cur.execute('SELECT commentid,post_id,userid,created_time FROM user_comments WHERE commentid in (SELECT commentid from petmatch_mapping);')
+		list_petmatchcomments = [[result[0].encode('ascii','ignore'), result[1].encode('ascii','ignore'), result[2].encode('ascii','ignore'), result[3].encode('ascii','ignore')] for result in results]
+		results = cur.execute ('select fbcomment_id,petmatch_id from petmatch_mapping;')
+		list_petmatchmaps = dict([[result[0].encode('ascii','ignore'), result[1]] for result in results])
+	except sql.Error, e:
+		print "Error %s:" % e.args[0]
+		sys.exit(1)	
+	return (list_petmatchcomments,list_petmatchmaps)
 
+#write to activity log as well.
+#users proposing pet matches based on matching suggestions seen on the facebook data
 def generatePetMatchCreate(output_filename,DB_NAME):
 	list_users = getUserListfromDB(DB_NAME)
 	(list_petmatchcomments,list_petmatchmaps) = getPetMatchListsFromDB(DB_NAME)
@@ -138,17 +175,79 @@ def generatePetMatchCreate(output_filename,DB_NAME):
 		output_file.write(log_string+'\n')
 	print "PetMatch POST Requests generated!"
 
-def generatePetMatchUpvote():
-	print "PetMatch POST Requests generated!"
+#get list of pet match viewers from a specific table
+def getPetMatchViewsListfromDB(DB_NAME):
+	(cur,con) = getDBConnection(DB_NAME)
+	try:
+		results = cur.execute('SELECT commentid, userid, created_time FROM user_comments_petmatchviews')
+		list_petmatchviews = [[result[0].encode('ascii','ignore'), result[1].encode('ascii','ignore'), result[2].encode('ascii','ignore'), result[3].encode('ascii','ignore')] for result in results]
+		results = cur.execute ('SELECT fbcomment_id,petmatch_id from petmatch_mapping WHERE fbcomment_id in (SELECT commentid from user_comments_petmatchviews);')
+		list_petmatchmaps = dict([[result[0].encode('ascii','ignore'), result[1]] for result in results])
+	except sql.Error, e:
+		print "Error %s:" % e.args[0]
+		sys.exit(1)	
+	return (list_petmatchviews,list_petmatchmaps)	
 
-def generatePetMatchDownvote():
-	print "PetMatch POST Requests generated!"
+#petmatchviews_filename is a table in the DB with a list of commentids and users who have viewed them(?)
+def generatePetMatchViews(output_filename, DB_NAME):
+	list_users = getUserListfromDB(DB_NAME)
+	(list_petmatchviews,list_petmatchmaps) = getPetMatchViewsListfromDB(DB_NAME)
+	output_file = open(output_filename,'w')
+	#need list of users with petmatch that they have viewed and the time of viewing. this would
+	#possibly be stored in a table. the table would have details about petmatch-comment-id, petmatch
+	#viewing timestamp, user-id, 
+	for [commentid,user,timestamp] in list_petmatchviews:
+		if user not in list_users:
+			print 'user %s not in list_users' %(user)
+			continue
+		if commentid not in list_petmatchmaps:
+			print 'petmatch %s not in list_petmatches' %(petmatch)
+			continue
+
+		user_id = list_users[user]
+		petmatch_id = list_petmatchmaps[commentid]
+		log_string = generateLogString(user_id,petmatch_id,"GET","petmatch",timestamp)
+		print log_string	 
+		output_file.write(log_string+'\n')
+	print "PetMatch GET Requests generated!"
+
+#write to activity log
+#Mon May 20 10:17:47 2013 [PETMATCH_UPVOTE]: amrutha upvoted the PetMatch object with ID{520}
+#Thu Mar 14 00:38:14 2013 [PETMATCH_DOWNVOTE]: amrutha downvoted the PetMatch object with ID{216}
+#Date<sp>[action]:<sp><username><string representign action><ID{ID#}>
+def generatePetMatchVote(output_filename, DB_NAME):
+	list_users = getUserListfromDB(DB_NAME)
+	(list_petmatchvoters,list_petmatchmaps) = getPetMatchVotersListfromDB(DB_NAME)
+	output_file = open(output_filename,'a')
+	#need list of users with petmatch that they have voted and the time of voting. this would
+	#possibly be stored in a table. the table would have details about petmatch-comment-id, petmatch
+	#voting timestamp, user-id, 
+	for [commentid,user,timestamp] in list_petmatchviews:
+		if user not in list_users:
+			print 'user %s not in list_users' %(user)
+			continue
+		if commentid not in list_petmatchmaps:
+			print 'petmatch %s not in list_petmatches' %(petmatch)
+			continue
+
+		user_id = list_users[user]
+		petmatch_id = list_petmatchmaps[commentid]
+		vote_type = random.randint(1,2)
+		if vote_type == 1:
+			request = "PETMATCH_UPVOTE"
+		else:
+			request = "PETMATCH_DOWNVOTE"
+		log_string = generateLogString(user,petmatch_id,'POST',request,timestamp)
+		print log_string
+		output_file.write(log_string)
+		#factor in the activity logs. either in the form of mongodb or text files
+	print "Vote PetMatch POST Requests generated!"
 
 def generateLogString(userid,objectid,method,request_object,timestamp=""):
 	LOG_LOOKUP = {"%h":"IPADDR","%l":"RFCID","%u":"HTTPUSER","%t":"TIME","\"%r\"":"REQSTRING","%>s":"STATUSCODE","%b":"OBJSIZE","%{X-Remote-User-Name}o":"USERNAME","%{X-Remote-User-Id}o":"USERID"}
 	LOG_FORMAT = "%h %l %u %t \"%r\" %>s %b %{X-Remote-User-Name}o %{X-Remote-User-Id}o"
 	VALUE_LOOKUP = {"%h":"127.0.0.1","%l":"-","%u":"-","%>s":"200","%b":""}
-	URL = {"petreport":"/reporting/PetReport/","bookmark":"/reporting/bookmark/","propose_petmatch":"/matching/propose_petmatch/"}
+	URL = {"petreport":"/reporting/PetReport/","bookmark":"/reporting/bookmark/","propose_petmatch":"/matching/propose_petmatch/","petmatch":"/matching/petmatch/","vote_petmatch":"/matching/vote_petmatch/"}
 	log_elements = LOG_FORMAT.split()
 	log_string = ""
 	for element in log_elements:
@@ -167,6 +266,8 @@ def generateLogString(userid,objectid,method,request_object,timestamp=""):
 			log_string += (str(userid))
 	return log_string
 
+DB_NAME="sandyspets530"
 #generatePetReportsGET("test_get.log",'sandyspets6-8')
 #generatePetReportBookmarks("test_bookmarks.log","sandyspets6-8")
-# generatePetMatchCreate("test_proposepetmatch.log","sandyspets6-8")
+# gelneratePetMatchCreate("test_proposepetmatch.log","sandyspets6-8")
+generatePetReportsSubmission("test_submitPetReport.log",DB_NAME)

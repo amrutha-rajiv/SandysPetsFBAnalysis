@@ -1,5 +1,5 @@
 #python libraries
-import sys, time,re
+import sys, time,re,random
 from datetime import datetime
 #third party libraries
 import sqlite3 as sql
@@ -48,8 +48,8 @@ def getAlbumNameforPosts():
 					out_file.write(print_stmt)
 					print print_stmt	
 
-def generatePetReports(posts_file="sandyspets-postid-lost.csv",pet_status="LOST"):
-	(cur,con) = getDBConnection('sandyspets6-8')
+def generatePetReports(DB_NAME,posts_file="sandyspets-postid-lost.csv",pet_status="LOST"):
+	(cur,con) = getDBConnection(DB_NAME)
 	lost_csvfile = open(posts_file,'r')
 	petreport_num = cur.execute('select count(*) from petreport_mapping').next()[0]
 	list_postid = []
@@ -87,8 +87,8 @@ def check_ifUnique():
 
 	print "overlap: "+str(overlap)
 	
-def analyzeSpecificPosts():
-	(cur,con) = getDBConnection('sandyspets6-8')
+def analyzeSpecificPosts(DB_NAME):
+	(cur,con) = getDBConnection(DB_NAME)
 	#results = cur.execute("select post from post_info where postid in %s")
 	csvfile = open('sandyspets-postid - unknown_type(2).csv','r')
 	list_postid = []
@@ -106,8 +106,8 @@ def analyzeSpecificPosts():
 	file_name = 'bow-unknown_type-posts(2).txt'
 	post_frequencies = getFrequency(list_posts,file_name)
 
-def analyzeMessages(type="POST"):
-	(cur,con) = getDBConnection('sandyspets6-8')
+def analyzeMessages(DB_NAME,type="POST"):
+	(cur,con) = getDBConnection(DB_NAME)
 	if type=="POST":
 		results = cur.execute("select post from post_info;")
 		file_name = 'post-freqdist.txt'
@@ -142,9 +142,9 @@ def getFrequency(list,file_name):
 			print (element.encode('utf8')+" "+str(fd[element]))			
 			out_file.write(element.encode('utf8')+" "+str(fd[element])+"\n")
 
-def mapUsers():
-	(cur,con) = getDBConnection('sandyspets6-8')
-	results = cur.execute('select distinct userid from user_activities;')
+def mapUsers(DB_NAME):
+	(cur,con) = getDBConnection(DB_NAME)
+	results = cur.execute('select distinct userid from user_likes;')
 	list_users = [result[0].encode('ascii','ignore') for result in results]
 	user_num = cur.execute('select count(*) from user_mapping').next()[0]
 	for user in list_users:
@@ -189,11 +189,29 @@ def mapPetmatches(DB_NAME,petmatch_filename):
 		cur.execute('INSERT INTO petreport_mapping VALUES(?,?,?,?)',[pet2_id,petreport_num,"","Unknown"])
 	con.commit()
 
+def mapUserPosts(DB_NAME,userpost_filename,pet_status):
+	userpost_file = open(userpost_filename,'r')
+	list_userpostids = fileToList(userpost_file)
+	(cur,con) = getDBConnection(DB_NAME)
+	results = cur.execute("select distinct fbpost_id from userpost_mapping;")
+	mapped_posts = [("\""+result[0].encode('ascii','ignore')+"\"") for result in results]
+	mapped_posts = '('+','.join(mapped_posts)+')'
+	results = cur.execute("select distinct fbpost_id from petreport_mapping where pet_status=\"Lost\" or pet_status=\"Unknown\" and fbpost_id not in "+mapped_posts)	
+	unmapped_posts = [result[0].encode('ascii','ignore') for result in results]
+	for userpostid in list_userpostids:
+		userpostid= re.split("\"",userpostid)[1]
+		fbpost_id = random.choice(unmapped_posts)
+		cur.execute("INSERT INTO userpost_mapping values(?,?)",[fbpost_id,userpostid])
+		unmapped_posts.remove(fbpost_id)
+	con.commit()	
+	print "[info] successfully mapped all user posts with status %s." %(pet_status)
+
 def createMappingTables(DB_NAME):
 	(cur,con) = getDBConnection(DB_NAME)
 	cur.execute('CREATE TABLE IF NOT EXISTS petreport_mapping(fbpost_id TEXT, petreport_id INT, created_time TIMESTAMP, pet_status TEXT);')
 	cur.execute('CREATE TABLE IF NOT EXISTS user_mapping(fbuser_id TEXT, user_id INT);')
 	cur.execute('CREATE TABLE IF NOT EXISTS petmatch_mapping(fbcomment_id TEXT, pet_id TEXT, petmatch_id INT);')		
+	cur.execute('CREATE TABLE IF NOT EXISTS userpost_mapping(fbpost_id TEXT, userpostid TEXT);')		
 	
 def analyze ():
 	(cur,con) = getDBConnection('sandyspets')
@@ -273,7 +291,9 @@ def analyze ():
 #mapUsers()
 #generatePetReports(posts_file="sandyspets-photos-id.csv")
 # mapAllPetReportsFromDB('sandyspets6-8')
-
-createMappingTables('sandyspets6-8')
-mapAllPetReportsFromDB('sandyspets6-8',type="POSTS")
+DB_NAME = 'sandyspets530'
+createMappingTables(DB_NAME)
+mapUserPosts(DB_NAME,'sandyspets530-postid-crosspostedlostpets.csv',"lost")
+#mapUsers('sandyspets530')
+#mapAllPetReportsFromDB('sandyspets530',type="POSTS")
 #mapPetmatches('sandyspets6-8',"sandyspets-commentid-matching.csv")

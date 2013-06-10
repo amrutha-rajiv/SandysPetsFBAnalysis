@@ -14,6 +14,7 @@ DB_NAME = raw_input("Enter SQLite DB name: ")
 num_userlikes = 1
 num_posts = 0
 num_albumlikes = 0
+list_commentids = []
 
 def getDBConnection(DB_NAME):
 	try:
@@ -240,12 +241,14 @@ def getObjectsList(DB_NAME,col,table):
 
 def getPageFeed(page_name,DB_NAME):
 	global ACCESS_TOKEN	
+	global list_commentids
 
 	graph = GraphAPI(ACCESS_TOKEN)
 	response = graph.get(page_name+'/?fields=feed.fields(from)')
 	next_page  = response['feed']['paging']['next']
 	response = response['feed']	
 	allposts = getObjectsList(DB_NAME,"postid","post_info")
+	list_commentids = getObjectsList(DB_NAME,"commentid","user_comments")
 	while next_page!= "":	
 		for element in response['data']:
 			postid = element['id']
@@ -293,6 +296,7 @@ def insertPostinDB(post,DB_NAME):
 	global num_userlikes
 	global num_posts
 	global num_userlikes_userpost
+	global list_commentids
 
 	postid = post["id"]
 	num_posts  += 1
@@ -332,23 +336,28 @@ def insertPostinDB(post,DB_NAME):
 		
 	if "likes" in post.keys():
 		likes_list = getAllInstancesOf(postid,"likes")
-		for like in likes_list:
-			cur.execute('insert into user_likes values(?,?,?,?)',[num_userlikes,like["id"],like["name"],postid])
-			print 'inserted into the user_likes table [%s, %s, %s]' %(like["id"],like["name"],postid)
-			num_userlikes += 1
+		if likes_list != None:
+			for like in likes_list:
+				cur.execute('insert into user_likes values(?,?,?,?)',[num_userlikes,like["id"],like["name"],postid])
+				print 'inserted into the user_likes table [%s, %s, %s]' %(like["id"],like["name"],postid)
+				num_userlikes += 1
 
 	if "comments" in post.keys():
 		comments_list = getAllInstancesOf(postid, "comments")
 
 		if comments_list != None:
+			temp_list_commentids = []
 			for comment in comments_list:
-				cur.execute('insert into user_comments values(?,?,?,?,?,?)',[comment["id"],\
-					comment["from"]["id"],comment["from"]["name"],comment["message"],postid,\
-					getTime(comment["created_time"])])
-				print 'insert into the user_comments table [%s, %s, %s, %s,%s,%s]' %(comment["id"],comment["from"]["id"]\
-					,comment["from"]["name"],comment["message"],postid,comment["created_time"])
+				if comment["from"]["id"] not in list_commentids:
+					cur.execute('insert into user_comments values(?,?,?,?,?,?)',[comment["id"],\
+						comment["from"]["id"],comment["from"]["name"],comment["message"],postid,\
+						getTime(comment["created_time"])])
+					temp_list_commentids.append(comment["from"]["id"])
+					print 'insert into the user_comments table [%s, %s, %s, %s,%s,%s]' %(comment["id"],comment["from"]["id"],\
+						comment["from"]["name"],comment["message"],postid,comment["created_time"])
 				
 	con.commit()
+	list_commentids += temp_list_commentids
 
 def checkIfDeleted(postid):
 	
