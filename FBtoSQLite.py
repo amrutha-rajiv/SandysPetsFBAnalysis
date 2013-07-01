@@ -346,18 +346,18 @@ def insertPostinDB(post,DB_NAME):
 		comments_list = getAllInstancesOf(postid, "comments")
 
 		if comments_list != None:
-			temp_list_commentids = []
+			
 			for comment in comments_list:
-				if comment["from"]["id"] not in list_commentids:
-					cur.execute('insert into user_comments values(?,?,?,?,?,?)',[comment["id"],\
-						comment["from"]["id"],comment["from"]["name"],comment["message"],postid,\
-						getTime(comment["created_time"])])
-					temp_list_commentids.append(comment["from"]["id"])
-					print 'insert into the user_comments table [%s, %s, %s, %s,%s,%s]' %(comment["id"],comment["from"]["id"],\
-						comment["from"]["name"],comment["message"],postid,comment["created_time"])
+				
+				cur.execute('insert into user_comments values(?,?,?,?,?,?)',[comment["id"],\
+					comment["from"]["id"],comment["from"]["name"],comment["message"],postid,\
+					getTime(comment["created_time"])])
+				
+				print 'insert into the user_comments table [%s, %s, %s, %s,%s,%s]' %(comment["id"],comment["from"]["id"],\
+					comment["from"]["name"],comment["message"],postid,comment["created_time"])
 				
 	con.commit()
-	list_commentids += temp_list_commentids
+	
 
 def checkIfDeleted(postid):
 	
