@@ -8,7 +8,7 @@ from facepy import GraphAPI,get_application_access_token
 
 #GLOBAL VARIABLES
 #ACCESS_TOKEN =raw_input("Enter a valid Facebook access token: ")
-ACCESS_TOKEN = get_application_access_token('168352736667694','1438d29eb39a5c6fd190ca8c9bdef97f')
+ACCESS_TOKEN = get_application_access_token(appId,appSecret)
 page_name = raw_input("Enter the Facebook page name :")
 DB_NAME = raw_input("Enter SQLite DB name: ")
 num_userlikes = 1
